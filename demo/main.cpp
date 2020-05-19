@@ -46,23 +46,11 @@ Thread mqtt_thread(osPriorityHigh);
 EventQueue mqtt_queue;
 Thread accThread;
 
+uint8_t who_am_i, data[2], res[6];
+int16_t acc16;
+float t[3];
+
 void acc(){
-   uint8_t who_am_i, data[2], res[6];
-   int16_t acc16;
-   float t[3];
-
-   // Enable the FXOS8700Q
-
-   FXOS8700CQ_readRegs( FXOS8700Q_CTRL_REG1, &data[1], 1);
-   data[1] |= 0x01;
-   data[0] = FXOS8700Q_CTRL_REG1;
-   FXOS8700CQ_writeRegs(data, 2);
-
-   // Get the slave address
-   FXOS8700CQ_readRegs(FXOS8700Q_WHOAMI, &who_am_i, 1);
-   pc.printf("Here is %x\r\n", who_am_i);
-   while (closed !=true) {
-
       FXOS8700CQ_readRegs(FXOS8700Q_OUT_X_MSB, res, 6);
 
       acc16 = (res[0] << 6) | (res[1] >> 2);
@@ -86,8 +74,8 @@ void acc(){
             t[2], res[4], res[5]\
       );
 
-      wait(0.5);
-   }  
+      wait(0.5); 
+
 }
 void messageArrived(MQTT::MessageData& md) {
 
@@ -103,6 +91,8 @@ void messageArrived(MQTT::MessageData& md) {
 }
 
 void publish_message(MQTT::Client<MQTTNetwork, Countdown>* client) {
+      while(!closed){
+      acc();
       message_num++;
       MQTT::Message message;
       char buff[100];
@@ -114,8 +104,8 @@ void publish_message(MQTT::Client<MQTTNetwork, Countdown>* client) {
       message.payloadlen = strlen(buff) + 1;
       int rc = client->publish(topic, message);
       printf("rc:  %d\r\n", rc);
-      printf("Puslish message: %s\r\n", buff);
-      acc();
+      printf("Puslish message: %s\r\n", buff); 
+      }
 }
 
 void close_mqtt() {
@@ -123,12 +113,19 @@ void close_mqtt() {
 }
 
 int main() {
+      // Enable the FXOS8700Q
+      FXOS8700CQ_readRegs( FXOS8700Q_CTRL_REG1, &data[1], 1);
+      data[1] |= 0x01;
+      data[0] = FXOS8700Q_CTRL_REG1;
+      FXOS8700CQ_writeRegs(data, 2);
+      // Get the slave address
+      FXOS8700CQ_readRegs(FXOS8700Q_WHOAMI, &who_am_i, 1);
+
       wifi = WiFiInterface::get_default_instance();
       if (!wifi) {
             printf("ERROR: No WiFiInterface found.\r\n");
             return -1;
       }
-
 
       printf("\nConnecting to %s...\r\n", MBED_CONF_APP_WIFI_SSID);
       int ret = wifi->connect(MBED_CONF_APP_WIFI_SSID, MBED_CONF_APP_WIFI_PASSWORD, NSAPI_SECURITY_WPA_WPA2);
@@ -143,7 +140,7 @@ int main() {
       MQTT::Client<MQTTNetwork, Countdown> client(mqttNetwork);
 
       //TODO: revise host to your ip
-      const char* host = "10.0.2.15";
+      const char* host = "172.20.10.3";
       printf("Connecting to TCP network...\r\n");
       int rc = mqttNetwork.connect(host, 1883);
       if (rc != 0) {
@@ -176,7 +173,7 @@ int main() {
 
       while (1) {
             if (closed) break;
-            wait(0.5);
+      //      wait(0.5);
       }
 
       printf("Ready to close MQTT Network......\n");
